@@ -1,0 +1,88 @@
+name: Today
+options:
+  bundleIdPrefix: com.drewbomar
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+  xcodeVersion: "27.0"
+
+settings:
+  base:
+    # Set your Personal Team here (or pick it in Xcode > Signing & Capabilities).
+    DEVELOPMENT_TEAM: JDM5KVK63K
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
+
+packages:
+  TodayCore:
+    path: Packages/TodayCore
+
+targets:
+  Today:
+    type: application
+    platform: iOS
+    sources:
+      - Today
+      - Shared
+    dependencies:
+      - package: TodayCore
+      - target: TodayWidgetExtension
+    info:
+      path: Today/Info.plist
+      properties:
+        CFBundleDisplayName: Today
+        NSSupportsLiveActivities: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.drewbomar.today
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Lets the shared intents do real work only in the app process.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) TODAY_APP"
+
+  TodayWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - TodayWidget
+      - Shared
+    dependencies:
+      - package: TodayCore
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    info:
+      path: TodayWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Today
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.drewbomar.today.widget
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
+
+schemes:
+  Today:
+    build:
+      targets:
+        Today: all
+        TodayWidgetExtension: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - package: TodayCore/TodayCoreTests
+    archive:
+      config: Release

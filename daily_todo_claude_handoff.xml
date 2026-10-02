@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<implementation_handoff version="1.0">
+  <mission>
+    Build a runnable native iPhone prototype, working title Today, that helps me finish everyday tasks by keeping my next tasks visible and actionable on the Lock Screen. Implement the project, not just a plan. Work through the bounded steps below autonomously; make reasonable reversible choices and document them. Do not expand the product into a general productivity suite.
+  </mission>
+
+  <user_context>
+    <device>iPhone 14, non-Pro, running iOS 26.1. The primary surface is the Lock Screen, not Dynamic Island.</device>
+    <installation>Personal installation through Xcode on my Mac, initially using a free Apple Personal Team with seven-day signing renewal. No App Store release or TestFlight submission in this task.</installation>
+    <examples>30 minutes of LeetCode prep; finish homework; text back John; buy a birthday present.</examples>
+    <core_value>Every time I look at my phone, I should be reminded of my next tasks. Automatic daily reappearance is central to the product, not optional polish. I am willing to open the app in the morning but want a noon fallback when I forget.</core_value>
+  </user_context>
+
+  <confirmed_product_decisions>
+    <decision>Native Apple simplicity, system light and dark modes, readable typography, standard controls, restrained accent color and subtle completion feedback.</decision>
+    <decision>Add, edit, delete, manually reorder, complete, and uncomplete tasks in the app. Drag order determines priority.</decision>
+    <decision>Show the first three unfinished tasks on the Live Activity. Three is the prototype default; do not build a three-versus-five preference yet.</decision>
+    <decision>Allow direct completion from the Lock Screen and completion in the app. A completed task leaves the active list and the next task moves into the visible three.</decision>
+    <decision>Unfinished one-off tasks carry forward automatically. Use an amber textual marker such as From yesterday or 2 days carried, rather than relying on color alone.</decision>
+    <decision>Recurring tasks produce one fresh occurrence per scheduled day. Missed occurrences never accumulate or carry forward.</decision>
+    <decision>Support daily recurrence and selected weekdays. LeetCode's 30 minutes is task text, not a timer feature.</decision>
+    <decision>No points, streaks, rewards, achievements, or other gamification in version one. These are possible later features only.</decision>
+  </confirmed_product_decisions>
+
+  <scope_defaults>
+    These are deliberate prototype assumptions for unanswered details, not additional confirmed user requirements.
+    <default>One Today list; no Later list, due dates, projects, tags, subtasks, search, calendar integration, accounts, sync, or backend.</default>
+    <default>All new one-off tasks enter today's list at the bottom. Carryover does not automatically override the user's manual order.</default>
+    <default>Recurrence templates retain a stable ordering position across days; their occurrences have independent completion state.</default>
+    <default>Show today's completed tasks in a collapsed section with Undo support. Keep lightweight completion records locally, but build no history dashboard.</default>
+    <default>Carryover means age in local calendar days since creation, not a missed due date. Keep the title's normal color and add a small amber label.</default>
+    <default>Use the current device calendar and time zone. Day changes are calendar changes, not fixed 24-hour intervals.</default>
+  </scope_defaults>
+
+  <critical_feasibility_gate>
+    <objective>Before visual polish, prove the smallest vertical slice: install, display three tasks in a Live Activity, complete one, persist the change, and schedule a later activity while the app is not foregrounded.</objective>
+    <research>
+      Inspect the installed Xcode SDK declarations and current official Apple documentation. iOS 26 documentation exposes scheduled Live Activity requests with a future start date. Verify the exact signature, availability, permissions, scheduling horizon, pending-activity limits, cancellation and update behavior, and actual behavior on iOS 26.1. Do not assume that scheduling one future activity creates a recurring schedule or grants background execution when it starts.
+      Verify free Personal Team support for every required entitlement and extension. In particular, test the chosen storage and intent execution design before assuming App Groups are available. Do not present a paid entitlement as free-compatible.
+    </research>
+    <renewal_requirement>
+      Implement the strongest supported local automatic daily renewal available. On setup or app use, schedule a noon fallback in advance. If the app is opened before noon, start or reconcile today's activity and cancel only today's redundant fallback. Preserve or replenish future fallback coverage within documented system limits. Prevent duplicate active or pending activities for the same date.
+      Investigate whether a rolling bounded schedule can cover multiple missed app-opening days, and whether foreground use or supported intent execution can safely replenish it. Keep pending content synchronized with task edits and completions. Future snapshots must represent the appropriate day's recurring tasks and one-off carryover, not blindly copy today's completed or missed recurring tasks.
+      Distinguish automatic daily reappearance from uninterrupted all-day presence. Standard Live Activities have an active-duration limit; scheduling a future activity does not remove it. Explicitly report any afternoon or overnight visibility gaps and do not promise a permanent card.
+    </renewal_requirement>
+    <honesty_and_fallback>
+      Never claim indefinite self-renewal based on a single scheduled start. Document the maximum verified unattended coverage, when it is replenished, and what happens when coverage expires. Test stale future snapshots and permissions being disabled.
+      If native scheduling cannot satisfy daily unattended renewal, investigate a user-configured Shortcuts time-of-day automation invoking a supported app intent as a local fallback. Verify that it can actually execute while locked and start the activity; do not assume support. Do not create a user automation without their setup action.
+      A reminder notification that requires a tap is a degraded fallback, not fulfillment of automatic renewal. Do not silently substitute it. Explain that server push may require a paid developer membership, credentials, infrastructure, and network access if it becomes the only viable route; do not build or buy that infrastructure in this task.
+      If a gate is blocked, continue building the usable checklist and best supported Live Activity prototype. Clearly mark the core requirement partially met or unmet and provide the smallest concrete next action. Do not stop the whole task for routine setup decisions.
+    </honesty_and_fallback>
+    <prohibited_shortcuts>No private APIs, fake background audio, timer loops pretending to run while suspended, promises of exact BGTaskScheduler timing, or invented APIs.</prohibited_shortcuts>
+  </critical_feasibility_gate>
+
+  <interface>
+    <app>
+      A single Today screen with a date, modest completed/total indicator, task rows with clear checkboxes, a quick-add control, a reorder affordance, and a collapsible Completed section. Use a small editor sheet for title and recurrence. Blank titles are invalid; trim whitespace. Support long titles without breaking controls. Editing a recurring template affects future occurrences; deleting a recurring task clearly offers removal of the series. Keep destructive actions out of the Lock Screen card.
+      Provide a small settings sheet for Lock Screen enablement and automatic-noon-start preference, defaulting to noon after an explicit opt-in. Include plain-language active/scheduled/unavailable status and a recovery action when useful. Avoid dumping diagnostic details into the main task flow.
+    </app>
+    <live_activity>
+      Compact Today header, up to three task rows with completion controls, and an optional remaining-task count. Show a concise carryover marker when space permits. Tapping task text or the card background opens the app; only the checkbox completes the task. When no tasks remain, briefly show All done and end today's activity without cancelling future daily coverage. Do not show an empty card on a day with no tasks if the platform permits reliable suppression.
+      Handle one, two, and three tasks, long titles, large text, light/dark appearance, reduced motion, and VoiceOver labels. Keep payloads inside ActivityKit size limits. Supply required system presentations using compact progress where appropriate, without spending time optimizing Dynamic Island for this non-Pro phone.
+    </live_activity>
+    <accidental_completion>Allow uncompletion from the app's Completed section. Make completion idempotent so duplicate taps never complete a different task or toggle a finished task back on.</accidental_completion>
+  </interface>
+
+  <engineering>
+    <stack>Swift, SwiftUI, ActivityKit, WidgetKit Live Activity extension, and App Intents. Target iOS 26.1 unless SDK availability requires a documented adjustment. Use Apple frameworks and minimal dependencies.</stack>
+    <project>Inspect repository instructions and existing files first. If this is an empty directory, create a complete Xcode project with app, extension, shared source, tests, entitlements as actually required, and shared build scheme. Preserve unrelated existing work. Do not assume a package alone is an installable app.</project>
+    <architecture>Keep a small task domain layer, durable repository, recurrence/day reconciliation service, and Live Activity coordinator separate from views. Route all app and intent mutations through the same behavior. Inject clock/calendar for meaningful recurrence tests.</architecture>
+    <persistence>
+      Choose the simplest durable storage compatible with the verified intent execution process and signing capabilities. If an App Group is supported and necessary, configure it consistently on both targets. Otherwise use a verified app-process LiveActivityIntent design with app-owned storage where possible. Do not use separate standard UserDefaults stores in app and extension and assume they are shared.
+      Save changes before publishing activity updates. Handle concurrent app/intent operations without lost writes, with stable task IDs and explicit idempotent completion. Never store the entire task history in activity content. Do not wipe existing data on launch, migration, or reinstall-over-existing-app. Document that deleting the app removes local data.
+    </persistence>
+    <model>
+      Represent one-off tasks, recurrence templates, and dated recurring occurrences explicitly enough to avoid duplicate generation. Preserve stable IDs, title, manual ordering, local-date occurrence identity, creation time, and completion timestamp as appropriate. Enforce uniqueness of template plus occurrence date. Missed recurring occurrences expire from the active list; a fresh occurrence is eligible on the next scheduled date. Reconcile on foreground entry, relevant intents, and supported background opportunities, while acknowledging that a calendar boundary alone does not wake the app.
+    </model>
+    <activity_lifecycle>Track pending, active, ended, and dismissed states. Reconcile against the system rather than trusting only cached IDs. Refresh active and scheduled snapshots after mutations using supported operations. Respect explicit disabling or dismissal rather than repeatedly resurrecting the same day's card. Reconcile time-zone changes, relaunch, and signing expiration gracefully.</activity_lifecycle>
+    <privacy>Explain once that task titles will be visible on the Lock Screen. Request only permissions actually needed, at the point of enabling the feature. No analytics or external transmission.</privacy>
+  </engineering>
+
+  <execution_steps>
+    <step order="1">Inspect environment and instructions; create a short implementation plan. Validate SDK, signing assumptions, scheduling APIs, and storage/intent feasibility. Record source links and findings in a concise feasibility note.</step>
+    <step order="2">Build the vertical-slice Live Activity and scheduling experiment. Use a DEBUG-only near-future scheduling control for tests; production behavior remains noon. Separate simulator evidence from physical-device evidence.</step>
+    <step order="3">Implement durable task CRUD, manual order, completion/undo, carryover, and daily/weekday recurrence with targeted domain tests.</step>
+    <step order="4">Implement the native Today interface and connect the Live Activity's real completion actions to the same repository. Add pending-schedule reconciliation and the best supported renewal strategy.</step>
+    <step order="5">Build and run available tests, fix concrete failures, inspect the UI, and document physical-device checks that remain. Finish the prototype and handoff without stopping after a scaffold or design proposal.</step>
+  </execution_steps>
+
+  <acceptance_checks>
+    <check>Add, edit, delete, reorder, complete, undo, terminate, and reopen: task state and manual order persist.</check>
+    <check>Completing one of the first three tasks from either surface yields the same saved result and promotes the next unfinished task. Rapid duplicate completion is harmless.</check>
+    <check>One-off tasks carry forward with correct calendar-day markers. Recurring tasks reset to exactly one fresh occurrence on eligible dates, with no missed-task backlog. Test repeated reconciliation, midnight, selected weekdays, DST and time-zone changes.</check>
+    <check>Schedule a short-delay activity, background the app, lock the phone, and observe start without reopening. Test cancellation when the app is opened first, no duplicates, pending-content edits, and behavior after force quit and reboot where test access permits.</check>
+    <check>Demonstrate or explicitly leave pending a multi-day unattended-renewal test. Report coverage horizon, stale-data behavior, expiry gaps, and whether recurrence is correct without foreground execution. Accelerated tests do not substitute for real duration testing.</check>
+    <check>Direct completion works under the actual locked-device authentication conditions; document any required unlock rather than claiming otherwise.</check>
+    <check>No-task, all-complete, permissions-disabled, dismissed-activity, long-title, and light/dark states are coherent.</check>
+    <check>The app and extension build for the configured SDK. Distinguish unsigned simulator compilation, signed device compilation, and actual successful device installation.</check>
+  </acceptance_checks>
+
+  <deliverables>
+    <item>Complete runnable Xcode project, implementation, and focused tests.</item>
+    <item>README with exact Mac/Xcode setup, signing-team and bundle-ID configuration, Developer Mode/device installation steps, and weekly rebuild instructions that preserve app identity and data. Do not instruct deleting the app to renew signing.</item>
+    <item>Short feasibility document with verified facts, sources, free-signing limitations, chosen renewal strategy, fallback behavior, and unresolved physical-device checks.</item>
+    <item>Final concise report: what works, build/test commands and results, which requirements are partial or blocked, and the smallest steps I must perform on my Mac/iPhone. Call out automatic daily renewal prominently.</item>
+  </deliverables>
+
+  <official_research_starting_points>
+    <url>https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities</url>
+    <url>https://developer.apple.com/documentation/activitykit/activity</url>
+    <url>https://developer.apple.com/documentation/widgetkit/adding-interactivity-to-widgets-and-live-activities</url>
+    <url>https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications</url>
+    <url>https://developer.apple.com/support/compare-memberships/</url>
+  </official_research_starting_points>
+</implementation_handoff>
