@@ -23,6 +23,7 @@
 		999EE7D12AF6B426B1B25C04 /* TodayCore in Frameworks */ = {isa = PBXBuildFile; productRef = 50B364E0D5D5FE74BD6C60DE /* TodayCore */; };
 		A6B08C18971619C9EADF8042 /* TodayActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A29C68E35B9D630CEF9DFA06 /* TodayActivityAttributes.swift */; };
 		B860917A264EF5507BC7690D /* TodayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70D9F2E4034E4CCF13A4EF6E /* TodayApp.swift */; };
+		D0EEF486091A91F99DBD8020 /* DayNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E91F898E15D9659ACC0E5B /* DayNavigation.swift */; };
 		D36FDBB0B2AE83F074ADFD3B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B17FCDA2CBB2C9A0ECA6550E /* Assets.xcassets */; };
 		DA6C6CAEE167AC97EFCAFA1C /* TaskEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 397A5230E02F51F64D93326B /* TaskEditorSheet.swift */; };
 		E02EFEA7CF484CCCD069F2AC /* TodayStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EC8EF5541418BB1B6EA23F9 /* TodayStore.swift */; };
@@ -61,6 +62,7 @@
 		28462E3926E9B246C894BB5B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		397A5230E02F51F64D93326B /* TaskEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorSheet.swift; sourceTree = "<group>"; };
 		3EC8EF5541418BB1B6EA23F9 /* TodayStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayStore.swift; sourceTree = "<group>"; };
+		58E91F898E15D9659ACC0E5B /* DayNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayNavigation.swift; sourceTree = "<group>"; };
 		5A529AB5437F31E88C7BF79B /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		5C76D3A1A2559505340C28D0 /* TodayIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayIntents.swift; sourceTree = "<group>"; };
 		70D9F2E4034E4CCF13A4EF6E /* TodayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayApp.swift; sourceTree = "<group>"; };
@@ -162,6 +164,7 @@
 		EB115BFE82F9388F5330F5D4 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				58E91F898E15D9659ACC0E5B /* DayNavigation.swift */,
 				5A529AB5437F31E88C7BF79B /* SettingsSheet.swift */,
 				397A5230E02F51F64D93326B /* TaskEditorSheet.swift */,
 				76B6BF00B62525FCE754D5A8 /* TodayView.swift */,
@@ -288,6 +291,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0EEF486091A91F99DBD8020 /* DayNavigation.swift in Sources */,
 				2A0D14AC8BFAEE9F3CBC8A8F /* LiveActivityCoordinator.swift in Sources */,
 				8C66825EF5464A960F28A112 /* SettingsSheet.swift in Sources */,
 				DA6C6CAEE167AC97EFCAFA1C /* TaskEditorSheet.swift in Sources */,

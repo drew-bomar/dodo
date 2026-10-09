@@ -150,7 +150,6 @@ extension TodayState {
         #expect(!changed3)
         #expect(s.activeTitles(c) == ["a", "c", "d"])
         #expect(s.completedRows(today: c.today).map(\.title) == ["b"])
-        #expect(s.completionLog.count == 1)
 
         let snap = s.snapshot(for: c.today, today: c.today)
         #expect(snap.rows.map(\.title) == ["a", "c", "d"])
@@ -167,7 +166,6 @@ extension TodayState {
         let changed5 = s.uncomplete(refs[0], context: c)
         #expect(!changed5)
         #expect(s.activeTitles(c) == ["a", "b", "c"])
-        #expect(s.completionLog.isEmpty)
     }
 
     @Test func staleOccurrenceTapIsNoOp() throws {
@@ -189,7 +187,7 @@ extension TodayState {
         s.reconcile(today: next.today)
         #expect(s.completedRows(today: next.today).isEmpty)
         #expect(s.oneOffs.isEmpty)
-        #expect(s.completionLog.count == 1, "history is kept in the log")
+        #expect(s.record(for: day("2026-10-02"))?.entries.map(\.outcome) == [.done], "history keeps it")
     }
 }
 
@@ -412,7 +410,7 @@ extension TodayState {
         }
         let state = try await repo.current().state
         #expect(state.activeRows(today: day("2026-10-02")).isEmpty)
-        #expect(state.completionLog.count == 20)
+        #expect(state.completedRows(today: day("2026-10-02")).count == 20)
     }
 
     @Test func dayRollsOverOnAccess() async throws {

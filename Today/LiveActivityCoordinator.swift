@@ -109,7 +109,9 @@ final class LiveActivityCoordinator {
             prefs.cardStartedAt = nil
         }
 
-        let wantsCard = !snapshot.isAllDone && prefs.dismissedDay != today
+        // Start a card only for real tasks; a running card may stay up to
+        // offer the long-term list, and ends only when nothing is left.
+        let wantsCard = snapshot.hasTasks && prefs.dismissedDay != today
 
         if let card = running.first {
             if snapshot.isAllDone {
@@ -151,7 +153,7 @@ final class LiveActivityCoordinator {
                 for extra in existing.dropFirst() { await extra.end(nil, dismissalPolicy: .immediate) }
                 existing = Array(existing.prefix(1))
 
-                if snap.isAllDone {
+                if !snap.hasTasks {
                     // Suppress empty cards on days with nothing to do.
                     for e in existing { await e.end(nil, dismissalPolicy: .immediate) }
                     report.coveredThrough = day
@@ -185,14 +187,14 @@ final class LiveActivityCoordinator {
             report.status = .showing
         } else if prefs.dismissedDay == today {
             report.status = .dismissedToday
-        } else if snapshot.isAllDone && prefs.endedByAppDay == today {
+        } else if !snapshot.hasTasks && prefs.endedByAppDay == today {
             report.status = .doneToday
         } else if let next = TodayActivity.activities
             .filter({ $0.activityState == .pending && !$0.attributes.isTest })
             .compactMap(\.attributes.scheduledStart).min() {
             report.status = .scheduled(next)
         } else {
-            report.status = snapshot.isAllDone ? .doneToday : .nothingScheduled
+            report.status = snapshot.hasTasks ? .nothingScheduled : .doneToday
         }
         return (prefs, report)
     }

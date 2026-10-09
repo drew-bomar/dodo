@@ -83,11 +83,33 @@ xcodegen generate
 
 ## Using it
 
-- **Add tasks** with the "Add a task" field. They are added at the bottom.
-- **Drag** to reorder. The top three unfinished tasks are what the Lock Screen shows.
-- **Tap** a task to edit its title or repeat setting (Never / Every day / Selected days).
-- **Recurring tasks:** a fresh copy appears on each scheduled day, and missed days don't pile up. Deleting one asks whether to delete the series or skip today.
-- **Unfinished one-offs** carry forward with an amber "From yesterday" or "N days carried" label.
-- **Completed tasks** go to the collapsible Completed section. Tap the check there to undo.
-- **Lock Screen:** only the circle completes a task. Tapping anywhere else opens the app.
-- **Your data** is a JSON file in the app's container, included in device backups. Nothing leaves the phone.
+**Daily tasks**
+- Add tasks with the "Add a task" field. They go to the bottom of today's list.
+- Drag to reorder. The top three unfinished tasks are what the Lock Screen shows.
+- Tap a task to edit it:
+  - its title
+  - its list: Daily or Long-term
+  - its repeat setting: Never, Every day, or Selected days
+  - its day: pick a later date to postpone it
+- Recurring tasks get a fresh copy on each scheduled day, and missed days don't pile up. Deleting one asks whether to delete the series or skip today.
+- Unfinished one-off tasks carry forward with an amber "From yesterday" or "N days carried" label.
+- Completed tasks go to the collapsible Completed section. Tap the check there to undo.
+
+**Long-term goals**
+- Long-term goals live below today's list and have no date. Drag to reorder.
+- Swipe right on a goal to **Do Today**, which moves it to the top of today's list.
+- When today's list is done, the Lock Screen card offers **See long-term list**. Tapping it shows your top three goals, with checkboxes, for the rest of the day.
+
+**Other days**
+- Use ‹ and › at the top, or tap the date to pick from a calendar.
+- **Past days** are read-only. They show what was done, what carried forward, and which recurring tasks were missed.
+  - Each day is recorded when it ends, including days you didn't open the app.
+  - Days before this update only show completions.
+- **Future days:**
+  - Add tasks under **Planned**. Drag them to set their order.
+  - Planned tasks stay hidden until their day, then join the top of that day's list and its Lock Screen card.
+  - "Also on this day" previews the recurring tasks and carried-over tasks that will be on that day's list too.
+
+**Lock Screen and data**
+- On the Lock Screen card, only the circle completes a task. Tapping anywhere else opens the app.
+- Your data is a JSON file in the app's container, included in device backups. Nothing leaves the phone.

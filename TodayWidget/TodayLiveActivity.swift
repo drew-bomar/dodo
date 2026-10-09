@@ -47,15 +47,16 @@ struct LockScreenCard: View {
     var isStale = false
 
     private var remaining: Int { snapshot.rows.count + snapshot.moreCount }
+    private var isLongTerm: Bool { snapshot.mode == .longTerm }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Label("Today", systemImage: "checklist")
+                Label(isLongTerm ? "Long-term" : "Today", systemImage: isLongTerm ? "flag" : "checklist")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.tint)
                 Spacer()
-                if !snapshot.isAllDone {
+                if snapshot.hasTasks {
                     Text("\(remaining) left")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
@@ -64,12 +65,7 @@ struct LockScreenCard: View {
             }
             .accessibilityElement(children: .combine)
 
-            if snapshot.isAllDone {
-                Label("All done", systemImage: "checkmark.circle.fill")
-                    .font(.headline)
-                    .foregroundStyle(.tint)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
+            if snapshot.hasTasks {
                 ForEach(snapshot.rows) { row in
                     LockScreenTaskRow(row: row)
                 }
@@ -78,6 +74,20 @@ struct LockScreenCard: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.leading, 36)
+                }
+            } else {
+                Label(isLongTerm ? "All done" : "All done for today", systemImage: "checkmark.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.tint)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if snapshot.longTermOffer > 0 {
+                    Button(intent: ShowLongTermIntent()) {
+                        Label("See long-term list (\(snapshot.longTermOffer))", systemImage: "flag")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .tint(.accentColor)
                 }
             }
         }
@@ -131,5 +141,11 @@ struct LockScreenTaskRow: View {
     ActivitySnapshot(day: LocalDay(year: 2026, month: 10, day: 2), rows: [
         .init(ref: "o:1", title: "Buy a birthday present", carryLabel: nil),
     ], moreCount: 0, completedCount: 4)
+    ActivitySnapshot(day: LocalDay(year: 2026, month: 10, day: 2), rows: [], moreCount: 0, completedCount: 5,
+                     longTermOffer: 4)
+    ActivitySnapshot(day: LocalDay(year: 2026, month: 10, day: 2), mode: .longTerm, rows: [
+        .init(ref: "l:1", title: "Learn Rust", carryLabel: nil),
+        .init(ref: "l:2", title: "Run a half marathon", carryLabel: nil),
+    ], moreCount: 0, completedCount: 0)
     ActivitySnapshot(day: LocalDay(year: 2026, month: 10, day: 2), rows: [], moreCount: 0, completedCount: 5)
 }

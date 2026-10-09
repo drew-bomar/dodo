@@ -46,3 +46,19 @@ struct ShowTodayOnLockScreenIntent: LiveActivityIntent {
         return .result()
     }
 }
+
+/// The "See long-term list" button on the finished card. Switches today's
+/// card to the top long-term goals until the day ends.
+struct ShowLongTermIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Show Long-Term List"
+    static let isDiscoverable = false
+
+    init() {}
+
+    func perform() async throws -> some IntentResult {
+        #if TODAY_APP
+        await TodayStore.shared.showLongTermOnLockScreen()
+        #endif
+        return .result()
+    }
+}

@@ -14,6 +14,9 @@ final class TodayStore {
     private(set) var today: LocalDay
     private(set) var active: [TaskRow] = []
     private(set) var completed: [TaskRow] = []
+    private(set) var longTerm: [TaskRow] = []
+    /// The full reconciled state, for history and planning views.
+    private(set) var state = TodayState()
     private(set) var lockScreen = LockScreenPreferences()
     private(set) var lockReport = LockScreenReport()
     /// A load or save failure the user should see. Data is never wiped to recover.
@@ -42,7 +45,25 @@ final class TodayStore {
         }
     }
 
-    var totalCount: Int { active.count + completed.count }
+    /// Today's daily tasks, done or not (goals are counted separately).
+    var totalCount: Int { active.count + completed.filter { !$0.isLongTerm }.count }
+    var dailyDoneCount: Int { completed.filter { !$0.isLongTerm }.count }
+
+    // MARK: - Other days
+
+    func record(for day: LocalDay) -> DayRecord? { state.record(for: day) }
+
+    /// Tasks planned for a future day (editable, reorderable).
+    func planned(on day: LocalDay) -> [TaskRow] { state.plannedRows(on: day) }
+
+    /// Everything else that will be on a future day's list: recurring tasks
+    /// and unfinished tasks carried that far.
+    func alsoOn(_ day: LocalDay) -> [TaskRow] {
+        let planned = Set(state.plannedRows(on: day).map(\.ref))
+        return state.projectedRows(on: day, today: today).filter { !planned.contains($0.ref) }
+    }
+
+    func placement(of id: UUID) -> TaskPlacement? { state.placement(of: id, today: today) }
 
     // MARK: - Lifecycle
 
@@ -70,13 +91,18 @@ final class TodayStore {
     // MARK: - Task mutations
 
     @discardableResult
-    func add(title: String, recurrence: Recurrence? = nil) async -> Bool {
-        await mutate { s, c in try s.addTask(title: title, recurrence: recurrence, context: c) }
+    func add(title: String, placement: TaskPlacement? = nil) async -> Bool {
+        await mutate { s, c in try s.addTask(title: title, placement: placement ?? .day(c.today), context: c) }
     }
 
     @discardableResult
-    func edit(orderID: UUID, title: String, recurrence: Recurrence?) async -> Bool {
-        await mutate { s, c in try s.editTask(id: orderID, title: title, recurrence: recurrence, context: c) }
+    func edit(orderID: UUID, title: String, placement: TaskPlacement) async -> Bool {
+        await mutate { s, c in try s.editTask(id: orderID, title: title, placement: placement, context: c) }
+    }
+
+    /// Moves a goal or planned task to the top of today's list.
+    func doToday(_ id: UUID) async {
+        await mutate { s, c in try s.doToday(id, context: c) }
     }
 
     func complete(_ ref: TaskRef) async {
@@ -87,13 +113,9 @@ final class TodayStore {
         await mutate { s, c in s.uncomplete(ref, context: c) }
     }
 
+    /// Deletes a task, a whole series, or a goal.
     func delete(_ ref: TaskRef) async {
-        await mutate { s, c in
-            switch ref {
-            case .oneOff(let id): s.deleteOneOff(id, context: c)
-            case .occurrence(let id, _): s.deleteSeries(id, context: c)
-            }
-        }
+        await mutate { s, c in s.delete(ref, context: c) }
     }
 
     func skipToday(seriesID: UUID) async {
@@ -108,8 +130,15 @@ final class TodayStore {
         Task { await mutate { s, c in s.moveActive(fromOffsets: fromOffsets, toOffset: toOffset, context: c) } }
     }
 
-    func series(_ id: UUID) async -> RecurringSeries? {
-        try? await repository.current().state.series(id)
+    func moveLongTerm(fromOffsets: IndexSet, toOffset: Int) {
+        var rows = longTerm
+        rows.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        longTerm = rows
+        Task { await mutate { s, c in s.moveLongTerm(fromOffsets: fromOffsets, toOffset: toOffset, context: c) } }
+    }
+
+    func movePlanned(on day: LocalDay, fromOffsets: IndexSet, toOffset: Int) {
+        Task { await mutate { s, c in s.movePlanned(on: day, fromOffsets: fromOffsets, toOffset: toOffset, context: c) } }
     }
 
     // MARK: - Lock Screen intents (run in the app process, possibly in the background)
@@ -118,6 +147,11 @@ final class TodayStore {
         guard let ref = TaskRef(string: refString) else { return }
         // canStart: LiveActivityIntent is allowed to start/schedule activities.
         await mutate(canStart: true) { s, c in s.complete(ref, context: c) }
+    }
+
+    /// "See long-term list" on the finished card: show goals for the rest of today.
+    func showLongTermOnLockScreen() async {
+        await mutate(canStart: true) { s, c in s.lockScreen.longTermDay = c.today }
     }
 
     func startTodayFromIntent() async {
@@ -177,6 +211,8 @@ final class TodayStore {
         today = context.today
         active = state.activeRows(today: context.today)
         completed = state.completedRows(today: context.today)
+        longTerm = state.longTermRows()
+        self.state = state
         lockScreen = state.lockScreen
         storageError = storageWarning
     }

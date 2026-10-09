@@ -90,6 +90,8 @@ public actor TaskRepository {
     private let now: @Sendable () -> Date
     private let timeZone: @Sendable () -> TimeZone
     private var cached: TodayState?
+    /// The cached state differs from disk (a migration ran on load).
+    private var unsaved = false
 
     public init(storage: StateStorage,
                 now: @escaping @Sendable () -> Date = { Date() },
@@ -114,16 +116,20 @@ public actor TaskRepository {
         let original = state
         state.reconcile(today: ctx.today)
         let result = try body(&state, ctx)
-        if state != original {
+        if state != original || unsaved {
             try storage.save(state)
             cached = state
+            unsaved = false
         }
         return (state, ctx, result)
     }
 
     private func loadedState() throws -> TodayState {
         if let cached { return cached }
-        let loaded = try storage.load() ?? TodayState()
+        var loaded = try storage.load() ?? TodayState()
+        let before = loaded
+        loaded.migrate(timeZone: timeZone())
+        unsaved = loaded != before
         cached = loaded
         return loaded
     }
