@@ -92,7 +92,7 @@ xcodegen generate
   - its repeat setting: Never, Every day, or Selected days
   - its day: pick a later date to postpone it
 - Recurring tasks get a fresh copy on each scheduled day, and missed days don't pile up. Deleting one asks whether to delete the series or skip today.
-- Unfinished one-off tasks carry forward with an amber "From yesterday" or "N days carried" label.
+- Unfinished one-off tasks carry forward with an amber "From yesterday" or "N days overdue" label. It turns red after three days.
 - Completed tasks go to the collapsible Completed section. Tap the check there to undo.
 
 **Long-term goals**
@@ -112,4 +112,5 @@ xcodegen generate
 
 **Lock Screen and data**
 - On the Lock Screen card, only the circle completes a task. Tapping anywhere else opens the app.
+- A ticked task shows its check for a moment, then fades out while the rest slide up. The "N left" count in the header includes the tasks beyond the first three.
 - Your data is a JSON file in the app's container, included in device backups. Nothing leaves the phone.

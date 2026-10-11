@@ -9,12 +9,32 @@ public struct ActivitySnapshot: Codable, Hashable, Sendable {
         public let ref: String
         public let title: String
         public let carryLabel: String?
+        /// Days carried, for colouring the label; 0 when not carried.
+        public let carriedDays: Int
+        /// Ticked on the card and about to be removed: shown checked for a
+        /// moment so the tap gets immediate feedback before the row slides out.
+        public var done: Bool
         public var id: String { ref }
 
-        public init(ref: String, title: String, carryLabel: String?) {
+        public init(ref: String, title: String, carryLabel: String?, carriedDays: Int = 0, done: Bool = false) {
             self.ref = ref
             self.title = title
             self.carryLabel = carryLabel
+            self.carriedDays = carriedDays
+            self.done = done
+        }
+
+        public var isUrgent: Bool { CarryLabel.isUrgent(days: carriedDays) }
+
+        enum CodingKeys: String, CodingKey { case ref, title, carryLabel, carriedDays, done }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            ref = try c.decode(String.self, forKey: .ref)
+            title = try c.decode(String.self, forKey: .title)
+            carryLabel = try c.decodeIfPresent(String.self, forKey: .carryLabel)
+            carriedDays = try c.decodeIfPresent(Int.self, forKey: .carriedDays) ?? 0
+            done = try c.decodeIfPresent(Bool.self, forKey: .done) ?? false
         }
     }
 
@@ -30,7 +50,7 @@ public struct ActivitySnapshot: Codable, Hashable, Sendable {
 
     public let day: LocalDay
     public let mode: Mode
-    public let rows: [Row]
+    public internal(set) var rows: [Row]
     /// Unfinished tasks beyond the visible rows.
     public let moreCount: Int
     public let completedCount: Int
@@ -49,7 +69,8 @@ public struct ActivitySnapshot: Codable, Hashable, Sendable {
 
     public init(day: LocalDay, mode: Mode = .daily, active: [TaskRow], completedCount: Int, longTermOffer: Int = 0) {
         let shown = active.prefix(Self.maxRows).map { row in
-            Row(ref: row.ref.description, title: Self.truncate(row.title), carryLabel: row.carryLabel)
+            Row(ref: row.ref.description, title: Self.truncate(row.title), carryLabel: row.carryLabel,
+                carriedDays: row.carriedDays)
         }
         self.init(day: day, mode: mode, rows: Array(shown), moreCount: max(0, active.count - shown.count),
                   completedCount: completedCount, longTermOffer: longTermOffer)
@@ -59,6 +80,14 @@ public struct ActivitySnapshot: Codable, Hashable, Sendable {
     public var hasTasks: Bool { !rows.isEmpty }
     /// Nothing left to show at all: the card should say "All done" and end.
     public var isAllDone: Bool { rows.isEmpty && longTermOffer == 0 }
+
+    /// The same card with `ref` shown ticked, or nil if it isn't on the card.
+    public func markingDone(_ ref: String) -> ActivitySnapshot? {
+        guard let i = rows.firstIndex(where: { $0.ref == ref }), !rows[i].done else { return nil }
+        var copy = self
+        copy.rows[i].done = true
+        return copy
+    }
 
     static func truncate(_ title: String) -> String {
         guard title.count > maxTitleLength else { return title }

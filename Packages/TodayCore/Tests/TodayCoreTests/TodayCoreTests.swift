@@ -199,7 +199,7 @@ extension TodayState {
         s.reconcile(today: day("2026-10-03"))
         #expect(s.activeRows(today: day("2026-10-03"))[0].carryLabel == "From yesterday")
         s.reconcile(today: day("2026-10-05"))
-        #expect(s.activeRows(today: day("2026-10-05"))[0].carryLabel == "3 days carried")
+        #expect(s.activeRows(today: day("2026-10-05"))[0].carryLabel == "3 days overdue")
     }
 
     @Test func carryAcrossMidnightIsCalendarNotHours() throws {
@@ -344,7 +344,7 @@ extension TodayState {
 
         let sun = s.snapshot(for: day("2026-10-04"), today: fri.today)
         #expect(sun.rows.map(\.title) == ["LeetCode 30 min", "homework", "present"])
-        #expect(sun.rows[1].carryLabel == "2 days carried")
+        #expect(sun.rows[1].carryLabel == "2 days overdue")
         #expect(sun.moreCount == 0)
 
         // The projection must equal what reconciliation produces on that day.

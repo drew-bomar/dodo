@@ -30,10 +30,16 @@ struct TodayView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle(DayNames.title(for: day, today: store.today))
-            .safeAreaInset(edge: .top, spacing: 0) {
-                DayNavigator(day: day, today: store.today, select: select, openCalendar: { showingCalendar = true })
-            }
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    DayNavigator(day: day, today: store.today, select: select, openCalendar: { showingCalendar = true })
+                }
+                if day != store.today {
+                    ToolbarItem(placement: .topBarLeading) {
+                        BackToTodayButton(day: day, today: store.today) { select(store.today) }
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Settings", systemImage: "gearshape") { showingSettings = true }
                 }
@@ -91,6 +97,7 @@ private struct TodaySections: View {
                 if store.totalCount > 0 {
                     Text("\(store.dailyDoneCount) of \(store.totalCount) done")
                         .monospacedDigit()
+                        .contentTransition(.numericText(value: Double(store.dailyDoneCount)))
                         .accessibilityLabel("\(store.dailyDoneCount) of \(store.totalCount) tasks done")
                 }
             }
@@ -99,7 +106,6 @@ private struct TodaySections: View {
                 Text("Add what you want to get done today. Drag to set priority — the top three appear on your Lock Screen.")
             }
         }
-        .animation(.default, value: store.active.map(\.id))
         .confirmationDialog("Delete repeating task?", isPresented: deleteDialogShown, titleVisibility: .visible,
                             presenting: pendingDelete) { row in
             if case .occurrence(let id, _) = row.ref {
@@ -109,7 +115,6 @@ private struct TodaySections: View {
         } message: { row in
             Text("“\(row.title)” repeats. Delete Series removes every future occurrence.")
         }
-        .sensoryFeedback(.success, trigger: store.completed.count) { old, new in new > old }
 
         if !store.completed.isEmpty {
             Section {
@@ -122,6 +127,7 @@ private struct TodaySections: View {
                 } label: {
                     Text("Completed (\(store.completed.count))")
                         .font(.subheadline.weight(.semibold))
+                        .contentTransition(.numericText(value: Double(store.completed.count)))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -177,7 +183,6 @@ private struct LongTermSection: View {
         } footer: {
             Text("Goals without a date. Swipe right to do one today. Once today's list is done, the Lock Screen offers your top three.")
         }
-        .animation(.default, value: store.longTerm.map(\.id))
     }
 }
 
@@ -354,7 +359,8 @@ struct QuickAddRow: View {
         let text = title
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         title = ""
-        focused = true
+        // Put the keyboard away; tapping the field again starts the next task.
+        focused = false
         Task { _ = await add(text) }
     }
 }
@@ -363,25 +369,52 @@ struct TaskRowView: View {
     let row: TaskRow
     let toggle: () -> Void
 
+    /// Completing plays out in place before the row leaves the list:
+    /// check + haptic, then a strike drawn left to right, then `toggle`.
+    @State private var finishing = false
+    @State private var strike: CGFloat = 0
+
+    private static let checkBeat: Duration = .milliseconds(180)
+    private static let strikeDuration = 0.4
+    private static let holdAfterStrike: Duration = .milliseconds(400)
+
+    private var showsDone: Bool { row.isCompleted || finishing }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Button(action: toggle) {
-                Image(systemName: row.isCompleted ? "checkmark.circle.fill" : "circle")
+            Button(action: tap) {
+                Image(systemName: showsDone ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
-                    .foregroundStyle(row.isCompleted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(showsDone ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.borderless)
+            .disabled(finishing)
+            .sensoryFeedback(.success, trigger: finishing) { _, new in new }
             .accessibilityLabel(row.isCompleted ? "Mark “\(row.title)” not done" : "Complete “\(row.title)”")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
                     .strikethrough(row.isCompleted)
-                    .foregroundStyle(row.isCompleted ? .secondary : .primary)
+                    .foregroundStyle(showsDone ? .secondary : .primary)
+                    // The animated strike: a struck-through copy of the title,
+                    // revealed from the leading edge.
+                    .overlay(alignment: .leading) {
+                        if finishing {
+                            Text(row.title)
+                                .strikethrough(color: .secondary)
+                                .foregroundStyle(.clear)
+                                .mask(alignment: .leading) {
+                                    Rectangle().scaleEffect(x: strike, anchor: .leading)
+                                }
+                                .accessibilityHidden(true)
+                        }
+                    }
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
                     if let carry = row.carryLabel, !row.isCompleted {
-                        Text(carry).foregroundStyle(.orange)
+                        Text(carry)
+                            .foregroundStyle(CarryLabel.isUrgent(days: row.carriedDays) ? .red : .orange)
                     }
                     if let recurrence = row.recurrence {
                         Label(recurrence.shortDescription, systemImage: "repeat")
@@ -398,6 +431,18 @@ struct TaskRowView: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+    }
+
+    private func tap() {
+        // Un-completing (from the Completed section) is immediate.
+        guard !row.isCompleted else { return toggle() }
+        Task { @MainActor in
+            withAnimation(.snappy(duration: 0.2)) { finishing = true }
+            try? await Task.sleep(for: Self.checkBeat)
+            withAnimation(.easeInOut(duration: Self.strikeDuration)) { strike = 1 }
+            try? await Task.sleep(for: .seconds(Self.strikeDuration) + Self.holdAfterStrike)
+            toggle()
+        }
     }
 }
 

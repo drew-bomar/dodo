@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 import TodayCore
 import UIKit
 
@@ -26,6 +27,7 @@ final class TodayStore {
     @ObservationIgnored private let coordinator = LiveActivityCoordinator()
     /// Set when durable storage could not be opened; shown until relaunch.
     @ObservationIgnored private var storageWarning: String?
+    @ObservationIgnored private var hasLoaded = false
 
     init(repository: TaskRepository? = nil) {
         var fallbackError: String?
@@ -145,9 +147,28 @@ final class TodayStore {
 
     func completeFromLockScreen(refString: String) async {
         guard let ref = TaskRef(string: refString) else { return }
-        // canStart: LiveActivityIntent is allowed to start/schedule activities.
-        await mutate(canStart: true) { s, c in s.complete(ref, context: c) }
+        let ticked = Date()
+        let showedTick = await coordinator.showTicked(refString, today: LocalDay(ticked, in: .current), tz: .current)
+        do {
+            let r = try await repository.mutate { s, c -> Bool in
+                s.complete(ref, context: c)
+                return true
+            }
+            apply(r.state, r.context)
+            // Let the tick register before the row slides away.
+            if showedTick {
+                let wait = Self.tickHold - Date().timeIntervalSince(ticked)
+                if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            }
+            // canStart: LiveActivityIntent is allowed to start/schedule activities.
+            await publish(r.state, r.context, canStart: true)
+        } catch {
+            storageError = "Couldn't save: \(error.localizedDescription)"
+        }
     }
+
+    /// How long a ticked row stays on the card before it is removed.
+    private static let tickHold: TimeInterval = 0.6
 
     /// "See long-term list" on the finished card: show goals for the rest of today.
     func showLongTermOnLockScreen() async {
@@ -208,13 +229,19 @@ final class TodayStore {
     }
 
     private func apply(_ state: TodayState, _ context: DayContext) {
-        today = context.today
-        active = state.activeRows(today: context.today)
-        completed = state.completedRows(today: context.today)
-        longTerm = state.longTermRows()
-        self.state = state
-        lockScreen = state.lockScreen
-        storageError = storageWarning
+        // Changes land after an await, outside any view transaction, so the
+        // list would snap between sizes. Animate them here instead, except
+        // for the first load, which should just appear.
+        withAnimation(hasLoaded ? .smooth(duration: 0.35) : nil) {
+            today = context.today
+            active = state.activeRows(today: context.today)
+            completed = state.completedRows(today: context.today)
+            longTerm = state.longTermRows()
+            self.state = state
+            lockScreen = state.lockScreen
+            storageError = storageWarning
+        }
+        hasLoaded = true
     }
 
     /// Saved state first, then the Live Activity. Bookkeeping the coordinator

@@ -303,3 +303,39 @@ import Testing
         #expect(s == once)
     }
 }
+
+@Suite struct CardRowTests {
+    @Test func overdueWordingAndUrgency() {
+        #expect(CarryLabel.text(forDays: 1) == "From yesterday")
+        #expect(CarryLabel.text(forDays: 4) == "4 days overdue")
+        #expect(!CarryLabel.isUrgent(days: 3))
+        #expect(CarryLabel.isUrgent(days: 4))
+    }
+
+    @Test func snapshotRowsCarryDayCount() throws {
+        var s = TodayState()
+        try s.addTask(title: "old", context: ctx("2026-10-01"))
+        s.reconcile(today: day("2026-10-05"))
+        let row = s.snapshot(for: day("2026-10-05"), today: day("2026-10-05")).rows[0]
+        #expect(row.carriedDays == 4)
+        #expect(row.isUrgent)
+        #expect(!row.done)
+    }
+
+    @Test func markingDoneTicksOnlyThatRow() throws {
+        var s = TodayState()
+        let a = try s.addTask(title: "a", context: ctx("2026-10-02"))
+        try s.addTask(title: "b", context: ctx("2026-10-02"))
+        let snap = s.snapshot(for: day("2026-10-02"), today: day("2026-10-02"))
+        let marked = try #require(snap.markingDone(a.description))
+        #expect(marked.rows.map(\.done) == [true, false])
+        #expect(marked.markingDone(a.description) == nil, "already ticked")
+        #expect(snap.markingDone("o:missing") == nil)
+    }
+
+    @Test func rowsFromThePreviousBuildStillDecode() throws {
+        let json = #"{"ref":"o:1","title":"Text John","carryLabel":"3 days carried"}"#
+        let row = try JSONDecoder().decode(ActivitySnapshot.Row.self, from: Data(json.utf8))
+        #expect(row.carriedDays == 0 && !row.done)
+    }
+}

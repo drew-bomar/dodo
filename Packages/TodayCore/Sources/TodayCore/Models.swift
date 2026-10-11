@@ -266,12 +266,17 @@ public struct TaskRow: Identifiable, Hashable, Sendable {
 }
 
 public enum CarryLabel {
-    /// "From yesterday", "2 days carried", or nil when not carried.
+    /// Past this many days a carried task is shown as urgent (red, not amber).
+    public static let urgentAfterDays = 3
+
+    /// "From yesterday", "2 days overdue", or nil when not carried.
     public static func text(forDays days: Int) -> String? {
         switch days {
         case ..<1: nil
         case 1: "From yesterday"
-        default: "\(days) days carried"
+        default: "\(days) days overdue"
         }
     }
+
+    public static func isUrgent(days: Int) -> Bool { days > urgentAfterDays }
 }

@@ -277,6 +277,20 @@ final class LiveActivityCoordinator {
         }
     }
 
+    /// Immediate feedback for a tap on the card: redraw today's card with
+    /// that row ticked, before any storage work. The following `sync` then
+    /// removes the row, which the card animates as a slide-up.
+    /// - Returns: true if a card was redrawn.
+    func showTicked(_ ref: String, today: LocalDay, tz: TimeZone) async -> Bool {
+        let card = TodayActivity.activities.first {
+            $0.attributes.localDay == today && !$0.attributes.isTest
+                && ($0.activityState == .active || $0.activityState == .stale)
+        }
+        guard let card, let ticked = card.content.state.markingDone(ref) else { return false }
+        await card.update(content(ticked, tz))
+        return true
+    }
+
     // MARK: - Helpers
 
     static func isLive(_ state: ActivityState) -> Bool {
