@@ -114,3 +114,4 @@ xcodegen generate
 - On the Lock Screen card, only the circle completes a task. Tapping anywhere else opens the app.
 - A ticked task shows its check for a moment, then fades out while the rest slide up. The "N left" count in the header includes the tasks beyond the first three.
 - Your data is a JSON file in the app's container, included in device backups. Nothing leaves the phone.
+- **Settings → Export Backup…** saves everything to a file, and **Restore from Backup…** replaces everything with one. Use this before installing a build signed by a different team (for example moving from free signing to the App Store build), which can't install over the old app.

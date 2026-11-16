@@ -26,6 +26,7 @@
 		D0EEF486091A91F99DBD8020 /* DayNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E91F898E15D9659ACC0E5B /* DayNavigation.swift */; };
 		D36FDBB0B2AE83F074ADFD3B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B17FCDA2CBB2C9A0ECA6550E /* Assets.xcassets */; };
 		DA6C6CAEE167AC97EFCAFA1C /* TaskEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 397A5230E02F51F64D93326B /* TaskEditorSheet.swift */; };
+		DCFF060D77E25594C30CBA68 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8153F6B4F165D654BF5186E4 /* PrivacyInfo.xcprivacy */; };
 		E02EFEA7CF484CCCD069F2AC /* TodayStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EC8EF5541418BB1B6EA23F9 /* TodayStore.swift */; };
 /* End PBXBuildFile section */
 
@@ -68,6 +69,7 @@
 		70D9F2E4034E4CCF13A4EF6E /* TodayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayApp.swift; sourceTree = "<group>"; };
 		76B6BF00B62525FCE754D5A8 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		7D1638C479E61E05A92FC79A /* Today.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Today.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8153F6B4F165D654BF5186E4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		9204EAE8400484D74809649E /* TodayCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TodayCore; path = Packages/TodayCore; sourceTree = SOURCE_ROOT; };
 		9B95734362BAB05A7E696AD4 /* LiveActivityCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityCoordinator.swift; sourceTree = "<group>"; };
 		A29C68E35B9D630CEF9DFA06 /* TodayActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayActivityAttributes.swift; sourceTree = "<group>"; };
@@ -143,6 +145,7 @@
 				28462E3926E9B246C894BB5B /* Assets.xcassets */,
 				217548D6AE24375F0D34FF37 /* Info.plist */,
 				9B95734362BAB05A7E696AD4 /* LiveActivityCoordinator.swift */,
+				8153F6B4F165D654BF5186E4 /* PrivacyInfo.xcprivacy */,
 				70D9F2E4034E4CCF13A4EF6E /* TodayApp.swift */,
 				C3678B691482A435F9E11255 /* TodayShortcuts.swift */,
 				3EC8EF5541418BB1B6EA23F9 /* TodayStore.swift */,
@@ -281,6 +284,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				779D768857815217E64FB0F7 /* Assets.xcassets in Resources */,
+				DCFF060D77E25594C30CBA68 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

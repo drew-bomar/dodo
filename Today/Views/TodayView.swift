@@ -55,6 +55,15 @@ struct TodayView: View {
                 CalendarSheet(day: day, today: store.today, select: select)
             }
             .onChange(of: store.today) { _, _ in selectedDay = nil }
+            #if DEBUG
+            // Screenshots: launch with `-screenshotDayOffset 3` or `-screenshotDaysAgo 2`
+            // to open on another day (a negative value would parse as a flag).
+            .onChange(of: store.today, initial: true) { _, today in
+                let defaults = UserDefaults.standard
+                let offset = defaults.integer(forKey: "screenshotDayOffset") - defaults.integer(forKey: "screenshotDaysAgo")
+                if offset != 0 { selectedDay = today.adding(days: offset) }
+            }
+            #endif
         }
     }
 

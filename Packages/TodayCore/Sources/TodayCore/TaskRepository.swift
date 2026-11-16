@@ -134,6 +134,18 @@ public actor TaskRepository {
         return loaded
     }
 
+    /// Replaces everything with a restored backup, reconciled to today
+    /// (days since the backup close into history), and saves it.
+    public func replace(with restored: TodayState) throws -> (state: TodayState, context: DayContext) {
+        let ctx = context
+        var state = restored
+        state.reconcile(today: ctx.today)
+        try storage.save(state)
+        cached = state
+        unsaved = false
+        return (state, ctx)
+    }
+
     /// Drops the in-memory copy so the next access re-reads disk.
     public func invalidate() { cached = nil }
 }

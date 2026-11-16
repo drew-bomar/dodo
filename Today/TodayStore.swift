@@ -188,6 +188,21 @@ final class TodayStore {
         }
     }
 
+    // MARK: - Backup
+
+    /// Everything, as a file the user can save and restore on another install.
+    func backupData() async throws -> Data {
+        try Backup.data(for: try await repository.current().state)
+    }
+
+    /// Replaces all tasks, history and settings with a backup.
+    func restore(from data: Data) async throws {
+        let restored = try Backup.restore(from: data, timeZone: .current)
+        let r = try await repository.replace(with: restored)
+        apply(r.state, r.context)
+        await publish(r.state, r.context, canStart: isForeground)
+    }
+
     // MARK: - Lock Screen settings
 
     func setLockScreenEnabled(_ enabled: Bool) async {

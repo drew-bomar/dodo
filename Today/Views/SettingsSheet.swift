@@ -1,12 +1,17 @@
 import SwiftUI
 import TodayCore
 import UIKit
+import UniformTypeIdentifiers
 
 struct SettingsSheet: View {
     @Environment(TodayStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var showPrivacyNote = false
+    @State private var exportDocument: BackupDocument?
+    @State private var importing = false
+    @State private var pendingRestore: URL?
+    @State private var backupMessage: String?
     #if DEBUG
     @State private var debugMessage = ""
     #endif
@@ -31,7 +36,7 @@ struct SettingsSheet: View {
                     ))
                     .disabled(!store.lockScreen.enabled)
                 } footer: {
-                    Text("Opening Today starts the card right away. On days you don't, the card appears at noon by itself. Your top three unfinished tasks are shown, and the checkbox completes a task without opening the app.")
+                    Text("Opening DoDo starts the card right away. On days you don't, the card appears at noon by itself. Your top three unfinished tasks are shown, and the checkbox completes a task without opening the app.")
                 }
 
                 if store.lockScreen.enabled {
@@ -42,19 +47,28 @@ struct SettingsSheet: View {
                         }
                     }
                     Section {
-                        Text("iOS keeps a card active for up to 8 hours, then removes it from the Lock Screen within 4 more. A card started at noon lasts into the evening; opening Today later starts a fresh one. Nothing shows overnight until the next card starts.")
+                        Text("iOS keeps a card active for up to 8 hours, then removes it from the Lock Screen within 4 more. A card started at noon lasts into the evening; opening DoDo later starts a fresh one. Nothing shows overnight until the next card starts.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } header: {
                         Text("How long the card stays")
                     }
                     Section {
-                        Text("If the noon cards ever run out (for example after several days without opening Today), you can add a Shortcuts automation: Automation → Time of Day → “Show Today on Lock Screen”, set to Run Immediately.")
+                        Text("If the noon cards ever run out (for example after several days without opening DoDo), you can add a Shortcuts automation: Automation → Time of Day → “Show DoDo on Lock Screen”, set to Run Immediately.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } header: {
                         Text("Optional backup")
                     }
+                }
+
+                Section {
+                    Button("Export Backup…", systemImage: "square.and.arrow.up") { exportBackup() }
+                    Button("Restore from Backup…", systemImage: "square.and.arrow.down") { importing = true }
+                } header: {
+                    Text("Backup")
+                } footer: {
+                    Text("Saves all tasks, goals and history to a file, for example in iCloud Drive. Restoring replaces everything in DoDo with the backup.")
                 }
 
                 #if DEBUG
@@ -91,6 +105,68 @@ struct SettingsSheet: View {
                 Text("Task titles will be visible on your Lock Screen, even while your iPhone is locked. Everything stays on this iPhone.")
             }
             .task { await store.refresh() }
+            .fileExporter(isPresented: exportShown, document: exportDocument, contentType: .json,
+                          defaultFilename: Backup.fileName(on: store.today)) { result in
+                if case .failure(let error) = result { backupMessage = error.localizedDescription }
+                exportDocument = nil
+            }
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+                switch result {
+                case .success(let url): pendingRestore = url
+                case .failure(let error): backupMessage = error.localizedDescription
+                }
+            }
+            .alert("Replace everything with this backup?", isPresented: restoreConfirmShown) {
+                Button("Cancel", role: .cancel) { pendingRestore = nil }
+                Button("Replace", role: .destructive) { restoreBackup() }
+            } message: {
+                Text("Your current tasks, goals and history will be replaced. This can't be undone.")
+            }
+            .alert("Backup", isPresented: messageShown) {
+                Button("OK") { backupMessage = nil }
+            } message: {
+                Text(backupMessage ?? "")
+            }
+        }
+    }
+
+    // MARK: - Backup
+
+    private var exportShown: Binding<Bool> {
+        Binding(get: { exportDocument != nil }, set: { if !$0 { exportDocument = nil } })
+    }
+
+    private var restoreConfirmShown: Binding<Bool> {
+        Binding(get: { pendingRestore != nil }, set: { if !$0 { pendingRestore = nil } })
+    }
+
+    private var messageShown: Binding<Bool> {
+        Binding(get: { backupMessage != nil }, set: { if !$0 { backupMessage = nil } })
+    }
+
+    private func exportBackup() {
+        Task {
+            do {
+                exportDocument = BackupDocument(data: try await store.backupData())
+            } catch {
+                backupMessage = "Couldn't create the backup: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func restoreBackup() {
+        guard let url = pendingRestore else { return }
+        pendingRestore = nil
+        Task {
+            // Files from the picker are outside the app's container.
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                try await store.restore(from: try Data(contentsOf: url))
+                backupMessage = "Restored."
+            } catch {
+                backupMessage = error.localizedDescription
+            }
         }
     }
 
@@ -100,7 +176,7 @@ struct SettingsSheet: View {
             Label("Off", systemImage: "lock")
         case .unavailable:
             VStack(alignment: .leading, spacing: 8) {
-                Label("Live Activities are turned off for Today", systemImage: "exclamationmark.triangle")
+                Label("Live Activities are turned off for DoDo", systemImage: "exclamationmark.triangle")
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                 }
@@ -128,9 +204,25 @@ struct SettingsSheet: View {
 
     @ViewBuilder private var coverage: some View {
         if store.lockScreen.autoNoonStart, let through = store.lockReport.coveredThrough {
-            Text("Noon cards are set through \(through.date(hour: 12, in: .current).formatted(.dateTime.weekday(.wide).month().day())). Opening Today extends this.")
+            Text("Noon cards are set through \(through.date(hour: 12, in: .current).formatted(.dateTime.weekday(.wide).month().day())). Opening DoDo extends this.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// The backup file handed to the system's save sheet.
+struct BackupDocument: FileDocument {
+    static let readableContentTypes: [UTType] = [.json]
+    let data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }

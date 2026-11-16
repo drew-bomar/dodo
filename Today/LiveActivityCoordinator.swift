@@ -262,7 +262,7 @@ final class LiveActivityCoordinator {
     private func alert(for snapshot: ActivitySnapshot) -> AlertConfiguration {
         let count = snapshot.rows.count + snapshot.moreCount
         return AlertConfiguration(
-            title: "Today",
+            title: "DoDo",
             body: "\(count) \(count == 1 ? "task" : "tasks") for today",
             sound: .default
         )
@@ -311,8 +311,8 @@ final class LiveActivityCoordinator {
     static func describe(_ error: Error) -> String {
         guard let e = error as? ActivityAuthorizationError else { return error.localizedDescription }
         switch e {
-        case .denied: return "Live Activities are turned off for Today in Settings."
-        case .visibility: return "The card can only be started while Today is open."
+        case .denied: return "Live Activities are turned off for DoDo in Settings."
+        case .visibility: return "The card can only be started while DoDo is open."
         case .targetMaximumExceeded, .globalMaximumExceeded: return "Too many Live Activities are running right now."
         case .attributesTooLarge: return "The card's content was too large."
         default: return "The Lock Screen card could not be started (\(e))."
@@ -333,7 +333,7 @@ final class LiveActivityCoordinator {
                 attributes: attributes,
                 content: content(state.snapshot(for: today, today: today), context.timeZone),
                 pushType: nil, style: .standard,
-                alertConfiguration: AlertConfiguration(title: "Today (test)", body: "Scheduled test card", sound: .default),
+                alertConfiguration: AlertConfiguration(title: "DoDo (test)", body: "Scheduled test card", sound: .default),
                 start: start)
             observe(a)
             return "Scheduled \(a.id.prefix(8)) for \(start.formatted(date: .omitted, time: .standard))"
