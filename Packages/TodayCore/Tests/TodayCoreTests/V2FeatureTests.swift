@@ -231,7 +231,8 @@ import Testing
         var s = TodayState()
         let c = ctx("2026-10-02")
         let goals = try ["g1", "g2", "g3", "g4"].map { try s.addTask(title: $0, placement: .longTerm, context: c) }
-        try s.addTask(title: "daily", recurrence: .daily, context: c)
+        let daily = try s.addTask(title: "daily", recurrence: .daily, context: c)
+        s.complete(daily, context: c)
         s.lockScreen.longTermDay = c.today
         let snap = s.snapshot(for: c.today, today: c.today)
         #expect(snap.mode == .longTerm)
@@ -242,6 +243,25 @@ import Testing
         s.reconcile(today: day("2026-10-03"))
         #expect(s.lockScreen.longTermDay == nil)
         #expect(s.snapshot(for: day("2026-10-03"), today: day("2026-10-03")).mode == .daily)
+    }
+
+    @Test func tasksAddedAfterChoosingGoalsTakeTheCardBack() throws {
+        var s = TodayState()
+        let c = ctx("2026-10-02")
+        let first = try s.addTask(title: "first", context: c)
+        try s.addTask(title: "goal", placement: .longTerm, context: c)
+        s.complete(first, context: c)
+        s.lockScreen.longTermDay = c.today
+        #expect(s.snapshot(for: c.today, today: c.today).mode == .longTerm)
+
+        let added = try s.addTask(title: "added later", context: c)
+        let snap = s.snapshot(for: c.today, today: c.today)
+        #expect(snap.mode == .daily)
+        #expect(snap.rows.map(\.title) == ["added later"])
+
+        // Finishing the list again returns to the goals already chosen today.
+        s.complete(added, context: c)
+        #expect(s.snapshot(for: c.today, today: c.today).mode == .longTerm)
     }
 
     @Test func allGoalsDoneEndsTheCard() throws {

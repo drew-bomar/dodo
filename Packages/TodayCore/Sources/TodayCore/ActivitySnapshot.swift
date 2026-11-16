@@ -116,11 +116,13 @@ extension TodayState {
     /// future day it is the projection (completed count starts at zero, and
     /// the long-term list is never offered on a day that hasn't happened).
     public func snapshot(for day: LocalDay, today: LocalDay) -> ActivitySnapshot {
-        if day == today && lockScreen.longTermDay == today {
+        let rows = projectedRows(on: day, today: today)
+        // Goals only while today's list is empty: tasks added after choosing
+        // "See long-term list" take the card back.
+        if day == today && lockScreen.longTermDay == today && rows.isEmpty {
             let done = completedRows(today: today).filter(\.isLongTerm).count
             return ActivitySnapshot(day: day, mode: .longTerm, active: longTermRows(), completedCount: done)
         }
-        let rows = projectedRows(on: day, today: today)
         guard day == today else { return ActivitySnapshot(day: day, active: rows, completedCount: 0) }
         let done = completedRows(today: today).filter { !$0.isLongTerm }.count
         // Offer the long-term list only after actually finishing today's list.
