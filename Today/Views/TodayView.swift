@@ -85,11 +85,9 @@ private struct TodaySections: View {
     var body: some View {
         Section {
             ForEach(store.active) { row in
-                TaskRowView(row: row) {
-                    Task { await store.complete(row.ref) }
+                TaskRowView(row: row, edit: { editing = row }) {
+                    await store.complete(row.ref, presentationDelay: TaskRowView.completionDuration)
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { editing = row }
                 .swipeActions(edge: .trailing) {
                     Button("Delete", systemImage: "trash", role: .destructive) { requestDelete(row) }
                 }
@@ -130,7 +128,7 @@ private struct TodaySections: View {
                 DisclosureGroup(isExpanded: $showCompleted) {
                     ForEach(store.completed) { row in
                         TaskRowView(row: row) {
-                            Task { await store.uncomplete(row.ref) }
+                            await store.uncomplete(row.ref)
                         }
                     }
                 } label: {
@@ -165,11 +163,9 @@ private struct LongTermSection: View {
     var body: some View {
         Section {
             ForEach(store.longTerm) { row in
-                TaskRowView(row: row) {
-                    Task { await store.complete(row.ref) }
+                TaskRowView(row: row, edit: { editing = row }) {
+                    await store.complete(row.ref, presentationDelay: TaskRowView.completionDuration)
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { editing = row }
                 .swipeActions(edge: .leading) {
                     Button("Do Today", systemImage: "arrow.up.to.line") {
                         Task { await store.doToday(row.ref.orderID) }
@@ -349,6 +345,7 @@ struct QuickAddRow: View {
     let prompt: String
     let add: (String) async -> Bool
     @State private var title = ""
+    @State private var isSaving = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -361,31 +358,36 @@ struct QuickAddRow: View {
                 .focused($focused)
                 .submitLabel(.done)
                 .onSubmit(submit)
+                .disabled(isSaving)
         }
     }
 
     private func submit() {
         let text = title
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        title = ""
-        // Put the keyboard away; tapping the field again starts the next task.
+        guard !isSaving, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        isSaving = true
         focused = false
-        Task { _ = await add(text) }
+        Task {
+            let saved = await add(text)
+            if saved { title = "" }
+            isSaving = false
+            if !saved { focused = true }
+        }
     }
 }
 
 struct TaskRowView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let row: TaskRow
-    let toggle: () -> Void
+    var edit: (() -> Void)? = nil
+    let toggle: () async -> Bool
 
     /// Completing plays out in place before the row leaves the list:
-    /// check + haptic, then a strike drawn left to right, then `toggle`.
+    /// check + haptic, then a strike drawn left to right, then a short hold.
+    /// `toggle` saves immediately; the store holds the row for `completionDuration`.
     @State private var finishing = false
     @State private var strike: CGFloat = 0
-
-    private static let checkBeat: Duration = .milliseconds(180)
-    private static let strikeDuration = 0.4
-    private static let holdAfterStrike: Duration = .milliseconds(400)
+    @State private var isSaving = false
 
     private var showsDone: Bool { row.isCompleted || finishing }
 
@@ -396,12 +398,28 @@ struct TaskRowView: View {
                     .font(.title2)
                     .foregroundStyle(showsDone ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     .contentTransition(.symbolEffect(.replace))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .disabled(finishing)
+            .disabled(isSaving)
             .sensoryFeedback(.success, trigger: finishing) { _, new in new }
             .accessibilityLabel(row.isCompleted ? "Mark “\(row.title)” not done" : "Complete “\(row.title)”")
 
+            if let edit {
+                Button(action: edit) { taskLabel }
+                    .buttonStyle(.plain)
+                    .disabled(isSaving)
+            } else {
+                taskLabel
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var taskLabel: some View {
+        HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
                     .strikethrough(row.isCompleted)
@@ -409,15 +427,14 @@ struct TaskRowView: View {
                     // The animated strike: a struck-through copy of the title,
                     // revealed from the leading edge.
                     .overlay(alignment: .leading) {
-                        if finishing {
-                            Text(row.title)
-                                .strikethrough(color: .secondary)
-                                .foregroundStyle(.clear)
-                                .mask(alignment: .leading) {
-                                    Rectangle().scaleEffect(x: strike, anchor: .leading)
-                                }
-                                .accessibilityHidden(true)
-                        }
+                        Text(row.title)
+                            .strikethrough(color: .secondary)
+                            .foregroundStyle(.clear)
+                            .mask(alignment: .leading) {
+                                Rectangle().scaleEffect(x: strike, anchor: .leading)
+                            }
+                            .opacity(finishing ? 1 : 0)
+                            .accessibilityHidden(true)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
@@ -438,19 +455,40 @@ struct TaskRowView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
+    private static let checkBeat: Duration = .milliseconds(180)
+    private static let strikeDuration: Duration = .milliseconds(400)
+    private static let holdAfterStrike: Duration = .milliseconds(400)
+    /// How long a completed row stays in place before it moves to Completed.
+    static let completionDuration = checkBeat + strikeDuration + holdAfterStrike
+
     private func tap() {
-        // Un-completing (from the Completed section) is immediate.
-        guard !row.isCompleted else { return toggle() }
+        guard !isSaving else { return }
+        isSaving = true
+        if !row.isCompleted {
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) { finishing = true }
+            if reduceMotion {
+                strike = 1
+            } else {
+                Task { @MainActor in
+                    try? await Task.sleep(for: Self.checkBeat)
+                    withAnimation(.easeInOut(duration: Self.strikeDuration / .seconds(1))) { strike = 1 }
+                }
+            }
+        }
         Task { @MainActor in
-            withAnimation(.snappy(duration: 0.2)) { finishing = true }
-            try? await Task.sleep(for: Self.checkBeat)
-            withAnimation(.easeInOut(duration: Self.strikeDuration)) { strike = 1 }
-            try? await Task.sleep(for: .seconds(Self.strikeDuration) + Self.holdAfterStrike)
-            toggle()
+            // This task intentionally survives navigation: a tap must save
+            // even if the row disappears or the app backgrounds mid-animation.
+            if !(await toggle()) {
+                finishing = false
+                strike = 0
+                isSaving = false
+            }
+            // Keep the outgoing row checked throughout its removal animation.
         }
     }
 }

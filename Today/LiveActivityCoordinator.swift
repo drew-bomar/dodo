@@ -64,17 +64,22 @@ final class LiveActivityCoordinator {
         let tz = context.timeZone
 
         let all = TodayActivity.activities
-        all.forEach(observe)
+        all.filter { Self.isLive($0.activityState) }.forEach(observe)
         let live = all.filter { Self.isLive($0.activityState) && !$0.attributes.isTest }
 
         // Cards from earlier days are always removed, test cards included.
-        for a in all where Self.isLive(a.activityState) && (a.attributes.localDay ?? today) < today {
+        for a in all where a.activityState != .dismissed && (a.attributes.localDay ?? today) < today {
             await a.end(nil, dismissalPolicy: .immediate)
         }
 
         guard prefs.enabled else {
-            for a in live { await a.end(nil, dismissalPolicy: .immediate) }
+            // Ended cards can still be visible on the Lock Screen.
+            for a in all where !a.attributes.isTest && a.activityState != .dismissed {
+                await a.end(nil, dismissalPolicy: .immediate)
+            }
             if !live.isEmpty { prefs.endedByAppDay = today }
+            prefs.cardDay = nil
+            prefs.cardStartedAt = nil
             report.status = .off
             return (prefs, report)
         }
@@ -88,6 +93,8 @@ final class LiveActivityCoordinator {
         let snapshot = state.snapshot(for: today, today: today)
         let todays = all.filter { $0.attributes.localDay == today && !$0.attributes.isTest }
         var running = todays.filter { $0.activityState == .active || $0.activityState == .stale }
+            .sorted { ($0.attributes.scheduledStart ?? prefs.cardStartedAt ?? now)
+                < ($1.attributes.scheduledStart ?? prefs.cardStartedAt ?? now) }
         let pendingToday = todays.filter { $0.activityState == .pending }
 
         // Never show two cards for one day; keep the oldest.
@@ -119,16 +126,16 @@ final class LiveActivityCoordinator {
                 prefs.endedByAppDay = today
                 prefs.cardDay = nil
                 prefs.cardStartedAt = nil
-            } else if card.content.state != snapshot {
+            } else if card.content.state != snapshot || card.content.staleDate != content(snapshot, tz).staleDate {
                 await card.update(content(snapshot, tz))
             }
             for p in pendingToday { await p.end(nil, dismissalPolicy: .immediate) }
         } else if wantsCard && canStart {
             // Opened before noon (or after the previous card expired): start
             // now and drop today's noon fallback so it cannot duplicate.
-            for p in pendingToday { await p.end(nil, dismissalPolicy: .immediate) }
             for old in todays where old.activityState == .ended { await old.end(nil, dismissalPolicy: .immediate) }
             if await startToday(snapshot, today: today, tz: tz, report: &report) {
+                for p in pendingToday { await p.end(nil, dismissalPolicy: .immediate) }
                 prefs.cardDay = today
                 prefs.cardStartedAt = now
                 prefs.endedByAppDay = nil
@@ -143,8 +150,13 @@ final class LiveActivityCoordinator {
 
         // MARK: Future noon cards
 
-        let future = live.filter { ($0.attributes.localDay ?? today) > today }
+        // Starting today may have evicted a pending card to free capacity.
+        // Re-read ActivityKit rather than claiming coverage from the old array.
+        let future = TodayActivity.activities.filter {
+            Self.isLive($0.activityState) && !$0.attributes.isTest && ($0.attributes.localDay ?? today) > today
+        }
         if prefs.autoNoonStart {
+            var continuousCoverage = true
             for offset in 1...Self.futureDays {
                 let day = today.adding(days: offset)
                 let snap = state.snapshot(for: day, today: today)
@@ -156,22 +168,26 @@ final class LiveActivityCoordinator {
                 if !snap.hasTasks {
                     // Suppress empty cards on days with nothing to do.
                     for e in existing { await e.end(nil, dismissalPolicy: .immediate) }
-                    report.coveredThrough = day
+                    if continuousCoverage { report.coveredThrough = day }
                     continue
                 }
                 if let e = existing.first {
                     let drift = abs((e.attributes.scheduledStart ?? start).timeIntervalSince(start))
-                    if drift < 60 {
-                        if e.content.state != snap { await e.update(content(snap, tz)) }
-                        report.coveredThrough = day
+                    if drift < 60 && e.activityState == .pending {
+                        let updated = content(snap, tz)
+                        if e.content.state != snap || e.content.staleDate != updated.staleDate { await e.update(updated) }
+                        if continuousCoverage { report.coveredThrough = day }
                         continue
                     }
                     // Time zone changed: noon moved. Reschedule.
                     await e.end(nil, dismissalPolicy: .immediate)
                 }
-                guard canStart else { break }
-                guard schedule(snap, day: day, start: start, tz: tz, report: &report) else { break }
-                report.coveredThrough = day
+                guard canStart, schedule(snap, day: day, start: start, tz: tz, report: &report) else {
+                    continuousCoverage = false
+                    // A gap must not stop updates to later, existing cards.
+                    continue
+                }
+                if continuousCoverage { report.coveredThrough = day }
             }
             let horizon = today.adding(days: Self.futureDays)
             for e in future where (e.attributes.localDay ?? today) > horizon {
@@ -270,15 +286,23 @@ final class LiveActivityCoordinator {
 
     private func observe(_ activity: TodayActivity) {
         guard observed.insert(activity.id).inserted else { return }
+        let initialState = activity.activityState
         Task { [weak self] in
-            for await _ in activity.activityStateUpdates {
+            var previous = initialState
+            for await state in activity.activityStateUpdates {
+                // The sequence may immediately yield its current value.
+                // That is not a change and must not trigger another sync.
+                guard state != previous else { continue }
+                previous = state
                 self?.onSystemChange?()
+                if state == .dismissed { break }
             }
+            self?.observed.remove(activity.id)
         }
     }
 
     /// Immediate feedback for a tap on the card: redraw today's card with
-    /// that row ticked, before any storage work. The following `sync` then
+    /// that row ticked, after the completion is saved. The following `sync` then
     /// removes the row, which the card animates as a slide-up.
     /// - Returns: true if a card was redrawn.
     func showTicked(_ ref: String, today: LocalDay, tz: TimeZone) async -> Bool {

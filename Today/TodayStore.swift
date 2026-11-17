@@ -28,6 +28,7 @@ final class TodayStore {
     /// Set when durable storage could not be opened; shown until relaunch.
     @ObservationIgnored private var storageWarning: String?
     @ObservationIgnored private var hasLoaded = false
+    @ObservationIgnored private let operations = OperationGate()
 
     init(repository: TaskRepository? = nil) {
         var fallbackError: String?
@@ -71,6 +72,8 @@ final class TodayStore {
 
     /// Foreground entry, day change, time-zone change: reconcile and publish.
     func refresh(canStart: Bool = true) async {
+        await operations.acquire()
+        defer { operations.release() }
         do {
             let (state, context) = try await repository.current()
             apply(state, context)
@@ -87,7 +90,7 @@ final class TodayStore {
     }
 
     private var isForeground: Bool {
-        UIApplication.shared.applicationState != .background
+        UIApplication.shared.applicationState == .active
     }
 
     // MARK: - Task mutations
@@ -107,11 +110,17 @@ final class TodayStore {
         await mutate { s, c in try s.doToday(id, context: c) }
     }
 
-    func complete(_ ref: TaskRef) async {
-        await mutate { s, c in s.complete(ref, context: c) }
+    @discardableResult
+    /// Saves at once; `presentationDelay` holds the row in place so the
+    /// check-off animation can finish before it moves to Completed.
+    func complete(_ ref: TaskRef, presentationDelay: Duration = .zero) async -> Bool {
+        await mutate(presentationDelay: UIAccessibility.isReduceMotionEnabled ? .zero : presentationDelay) {
+            s, c in s.complete(ref, context: c)
+        }
     }
 
-    func uncomplete(_ ref: TaskRef) async {
+    @discardableResult
+    func uncomplete(_ ref: TaskRef) async -> Bool {
         await mutate { s, c in s.uncomplete(ref, context: c) }
     }
 
@@ -129,46 +138,49 @@ final class TodayStore {
         var rows = active
         rows.move(fromOffsets: fromOffsets, toOffset: toOffset)
         active = rows
-        Task { await mutate { s, c in s.moveActive(fromOffsets: fromOffsets, toOffset: toOffset, context: c) } }
+        let ids = rows.map(\.ref.orderID)
+        Task { await mutate { s, c in s.reorderActive(ids, context: c) } }
     }
 
     func moveLongTerm(fromOffsets: IndexSet, toOffset: Int) {
         var rows = longTerm
         rows.move(fromOffsets: fromOffsets, toOffset: toOffset)
         longTerm = rows
-        Task { await mutate { s, c in s.moveLongTerm(fromOffsets: fromOffsets, toOffset: toOffset, context: c) } }
+        let ids = rows.map(\.ref.orderID)
+        Task { await mutate { s, c in s.reorderLongTerm(ids, context: c) } }
     }
 
     func movePlanned(on day: LocalDay, fromOffsets: IndexSet, toOffset: Int) {
-        Task { await mutate { s, c in s.movePlanned(on: day, fromOffsets: fromOffsets, toOffset: toOffset, context: c) } }
+        var rows = planned(on: day)
+        rows.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        let ids = rows.map(\.ref.orderID)
+        Task { await mutate { s, c in s.reorderPlanned(ids, on: day, context: c) } }
     }
 
     // MARK: - Lock Screen intents (run in the app process, possibly in the background)
 
     func completeFromLockScreen(refString: String) async {
         guard let ref = TaskRef(string: refString) else { return }
-        let ticked = Date()
-        let showedTick = await coordinator.showTicked(refString, today: LocalDay(ticked, in: .current), tz: .current)
+        await operations.acquire()
+        defer { operations.release() }
         do {
             let r = try await repository.mutate { s, c -> Bool in
                 s.complete(ref, context: c)
-                return true
             }
             apply(r.state, r.context)
-            // Let the tick register before the row slides away.
-            if showedTick {
-                let wait = Self.tickHold - Date().timeIntervalSince(ticked)
-                if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            // Only acknowledge a durable completion. Keep other syncs out of
+            // this two-frame transition so they cannot erase or resurrect it.
+            if r.result, await coordinator.showTicked(refString, today: r.context.today, tz: r.context.timeZone) {
+                try? await Task.sleep(for: .milliseconds(300))
             }
             // canStart: LiveActivityIntent is allowed to start/schedule activities.
-            await publish(r.state, r.context, canStart: true)
+            let latest = try await repository.current()
+            apply(latest.state, latest.context)
+            await publish(latest.state, latest.context, canStart: true)
         } catch {
             storageError = "Couldn't save: \(error.localizedDescription)"
         }
     }
-
-    /// How long a ticked row stays on the card before it is removed.
-    private static let tickHold: TimeInterval = 0.6
 
     /// "See long-term list" on the finished card: show goals for the rest of today.
     func showLongTermOnLockScreen() async {
@@ -176,10 +188,14 @@ final class TodayStore {
     }
 
     func startTodayFromIntent() async {
+        await operations.acquire()
+        defer { operations.release() }
         do {
             let r = try await repository.mutate { s, c in
                 // An explicit request overrides an earlier swipe-away today.
                 if s.lockScreen.dismissedDay == c.today { s.lockScreen.dismissedDay = nil }
+                s.lockScreen.cardDay = nil
+                s.lockScreen.cardStartedAt = nil
             }
             apply(r.state, r.context)
             await publish(r.state, r.context, canStart: true)
@@ -192,11 +208,15 @@ final class TodayStore {
 
     /// Everything, as a file the user can save and restore on another install.
     func backupData() async throws -> Data {
-        try Backup.data(for: try await repository.current().state)
+        await operations.acquire()
+        defer { operations.release() }
+        return try Backup.data(for: try await repository.current().state)
     }
 
     /// Replaces all tasks, history and settings with a backup.
     func restore(from data: Data) async throws {
+        await operations.acquire()
+        defer { operations.release() }
         let restored = try Backup.restore(from: data, timeZone: .current)
         let r = try await repository.replace(with: restored)
         apply(r.state, r.context)
@@ -208,7 +228,12 @@ final class TodayStore {
     func setLockScreenEnabled(_ enabled: Bool) async {
         await mutate { s, _ in
             s.lockScreen.enabled = enabled
-            if enabled { s.lockScreen.privacyAcknowledged = true }
+            if enabled {
+                s.lockScreen.privacyAcknowledged = true
+                s.lockScreen.dismissedDay = nil
+                s.lockScreen.cardDay = nil
+                s.lockScreen.cardStartedAt = nil
+            }
         }
     }
 
@@ -220,34 +245,49 @@ final class TodayStore {
     func showTodayAgain() async {
         await mutate { s, c in
             if s.lockScreen.dismissedDay == c.today { s.lockScreen.dismissedDay = nil }
+            s.lockScreen.cardDay = nil
+            s.lockScreen.cardStartedAt = nil
         }
     }
 
     // MARK: - Plumbing
 
     @discardableResult
-    private func mutate(canStart: Bool? = nil, _ body: @escaping (inout TodayState, DayContext) throws -> Void) async -> Bool {
+    private func mutate(canStart: Bool? = nil, presentationDelay: Duration = .zero,
+                        _ body: @escaping (inout TodayState, DayContext) throws -> Void) async -> Bool {
+        await operations.acquire()
+        defer { operations.release() }
         do {
             let (state, context, _) = try await repository.mutate { s, c -> Bool in
                 try body(&s, c)
                 return true
             }
+            // Persist immediately; only the visual removal waits for the tick.
+            if presentationDelay > .zero { try? await Task.sleep(for: presentationDelay) }
             apply(state, context)
             await publish(state, context, canStart: canStart ?? isForeground)
             return true
         } catch TaskError.emptyTitle, TaskError.invalidRecurrence, TaskError.notFound {
+            resetOptimisticRows()
             return false
         } catch {
+            resetOptimisticRows()
             storageError = "Couldn't save: \(error.localizedDescription)"
             return false
         }
+    }
+
+    private func resetOptimisticRows() {
+        active = state.activeRows(today: today)
+        completed = state.completedRows(today: today)
+        longTerm = state.longTermRows()
     }
 
     private func apply(_ state: TodayState, _ context: DayContext) {
         // Changes land after an await, outside any view transaction, so the
         // list would snap between sizes. Animate them here instead, except
         // for the first load, which should just appear.
-        withAnimation(hasLoaded ? .smooth(duration: 0.35) : nil) {
+        withAnimation(hasLoaded && !UIAccessibility.isReduceMotionEnabled ? .smooth(duration: 0.35) : nil) {
             today = context.today
             active = state.activeRows(today: context.today)
             completed = state.completedRows(today: context.today)

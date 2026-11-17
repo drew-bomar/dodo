@@ -64,6 +64,17 @@
                ReferencedContainer = "container:Packages/TodayCore">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C92F1E46719D00AB31EFCBBC"
+               BuildableName = "TodayUITests.xctest"
+               BlueprintName = "TodayUITests"
+               ReferencedContainer = "container:Today.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

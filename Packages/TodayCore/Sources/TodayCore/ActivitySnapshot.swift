@@ -47,6 +47,9 @@ public struct ActivitySnapshot: Codable, Hashable, Sendable {
 
     public static let maxRows = 3
     public static let maxTitleLength = 100
+    /// Encoded bytes, not characters: a single emoji or combining sequence
+    /// can be many bytes. Leave ample room for three rows and attributes.
+    public static let maxTitleBytes = 512
 
     public let day: LocalDay
     public let mode: Mode
@@ -90,8 +93,18 @@ public struct ActivitySnapshot: Codable, Hashable, Sendable {
     }
 
     static func truncate(_ title: String) -> String {
-        guard title.count > maxTitleLength else { return title }
-        return String(title.prefix(maxTitleLength - 1)) + "…"
+        let encoder = JSONEncoder()
+        func fits(_ text: String) -> Bool {
+            (try? encoder.encode(text).count).map { $0 <= maxTitleBytes } ?? false
+        }
+        if title.count <= maxTitleLength && fits(title) { return title }
+        var prefix = ""
+        for character in title.prefix(maxTitleLength - 1) {
+            let next = prefix + String(character)
+            guard fits(next + "…") else { break }
+            prefix = next
+        }
+        return prefix + "…"
     }
 
     enum CodingKeys: String, CodingKey {

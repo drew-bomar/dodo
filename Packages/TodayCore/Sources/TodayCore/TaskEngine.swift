@@ -492,6 +492,33 @@ extension TodayState {
 
     // MARK: - Reordering
 
+    /// The UI captures identities at drag time. A completion or day rollover
+    /// before this save must not make the same offsets refer to different tasks.
+    public mutating func reorderActive(_ ids: [UUID], context: DayContext) {
+        reconcile(today: context.today)
+        order = Self.reslot(order, requested: ids, allowed: activeRows(today: context.today).map(\.ref.orderID))
+    }
+
+    public mutating func reorderPlanned(_ ids: [UUID], on day: LocalDay, context: DayContext) {
+        reconcile(today: context.today)
+        order = Self.reslot(order, requested: ids, allowed: plannedRows(on: day).map(\.ref.orderID))
+    }
+
+    public mutating func reorderLongTerm(_ ids: [UUID], context: DayContext) {
+        reconcile(today: context.today)
+        let reordered = Self.reslot(longTerm.map(\.id), requested: ids, allowed: longTermRows().map(\.ref.orderID))
+        let byID = Dictionary(uniqueKeysWithValues: longTerm.map { ($0.id, $0) })
+        longTerm = reordered.compactMap { byID[$0] }
+    }
+
+    private static func reslot(_ full: [UUID], requested: [UUID], allowed: [UUID]) -> [UUID] {
+        let allowed = Set(allowed)
+        var seen = Set<UUID>()
+        let requested = requested.filter { allowed.contains($0) && seen.insert($0).inserted }
+        var next = requested.makeIterator()
+        return full.map { seen.contains($0) ? next.next()! : $0 }
+    }
+
     /// Reorders today's active list like `Array.move(fromOffsets:toOffset:)`.
     /// Items not currently visible (completed, planned, unscheduled series)
     /// keep their slots in the global order.

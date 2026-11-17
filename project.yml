@@ -72,6 +72,19 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SKIP_INSTALL: YES
 
+  TodayUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - TodayUITests
+    dependencies:
+      - target: Today
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.drewbomar.today.uitests
+        TARGETED_DEVICE_FAMILY: "1"
+
 schemes:
   Today:
     build:
@@ -84,5 +97,6 @@ schemes:
       config: Debug
       targets:
         - package: TodayCore/TodayCoreTests
+        - TodayUITests
     archive:
       config: Release

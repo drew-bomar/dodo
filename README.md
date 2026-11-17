@@ -19,6 +19,7 @@ Packages/TodayCore/   Domain layer (pure Foundation) and its tests
 Shared/               Compiled into app and widget: activity attributes and intents
 Today/                App: SwiftUI screens, TodayStore, LiveActivityCoordinator
 TodayWidget/          Live Activity UI (Lock Screen card)
+TodayUITests/         Completion, undo, relaunch and Live Activity startup regressions
 project.yml           XcodeGen spec; Today.xcodeproj is generated from it
 scripts/test-core.sh  Runs the domain tests with plain swiftc
 ```
@@ -76,6 +77,9 @@ scripts/test-core.sh
 xcodebuild -project Today.xcodeproj -scheme Today -destination 'generic/platform=iOS Simulator' build
 xcodebuild -project Today.xcodeproj -scheme Today -destination 'platform=iOS Simulator,name=iPhone 17' test
 swift test --package-path Packages/TodayCore
+
+# UI regression tests (use a disposable simulator; these add test tasks)
+xcodebuild -project Today.xcodeproj -scheme Today -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:TodayUITests test
 
 # After changing project.yml or adding files
 xcodegen generate

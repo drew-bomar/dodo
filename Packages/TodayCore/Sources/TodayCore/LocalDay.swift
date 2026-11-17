@@ -81,9 +81,19 @@ extension LocalDay: CustomStringConvertible, Codable {
     }
 
     public init?(string: String) {
+        let bytes = Array(string.utf8)
+        guard bytes.count == 10, bytes[4] == 45, bytes[7] == 45,
+              bytes.enumerated().allSatisfy({ index, byte in
+                  index == 4 || index == 7 || (48...57).contains(byte)
+              }) else { return nil }
         let parts = string.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 3, (1...12).contains(parts[1]), (1...31).contains(parts[2]) else { return nil }
-        self.init(year: parts[0], month: parts[1], day: parts[2])
+        guard parts.count == 3, (1...9999).contains(parts[0]),
+              (1...12).contains(parts[1]), (1...31).contains(parts[2]) else { return nil }
+        let candidate = LocalDay(year: parts[0], month: parts[1], day: parts[2])
+        // Reject impossible dates (e.g. February 30) before calendar math or
+        // Foundation normalizes them into another day's task identity.
+        guard LocalDay(ordinal: candidate.ordinal) == candidate else { return nil }
+        self = candidate
     }
 
     public init(from decoder: Decoder) throws {
